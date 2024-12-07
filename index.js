@@ -10,9 +10,17 @@ const app = express();
 app.use(express.json());
 app.use(cors({
     // Allow requests only from your Docusaurus domain
-    origin: 'https://smart-search-plugin-demo.vercel.app/',
+    origin: 'https://smart-search-plugin-demo.vercel.app',  // Removed trailing slash
     methods: ['POST']
 }));
+
+// Add debug logging middleware
+app.use((req, res, next) => {
+    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    console.log('Request Headers:', req.headers);
+    console.log('Request Body:', req.body);
+    next();
+});
 
 // Define the feedback schema
 const feedbackSchema = new mongoose.Schema({
@@ -37,14 +45,20 @@ const feedbackSchema = new mongoose.Schema({
 
 const Feedback = mongoose.model('Feedback', feedbackSchema);
 
-// Feedback submission endpoint
-app.post('/api/feedback/submit', async (req, res) => {
+// Update the endpoint to match your request
+app.post('/api/feedback', async (req, res) => {
     try {
+        console.log('Attempting to save feedback:', req.body);
         const feedback = new Feedback(req.body);
         await feedback.save();
+        console.log('Feedback saved successfully');
         res.status(201).json({ message: 'Feedback submitted successfully' });
     } catch (error) {
-        console.error('Error submitting feedback:', error);
+        console.error('Detailed error:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         res.status(500).json({ message: 'Error submitting feedback' });
     }
 });
