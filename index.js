@@ -6,21 +6,6 @@ require('dotenv').config();
 
 const app = express();
 
-// Add raw body logging before JSON parsing
-app.use((req, res, next) => {
-    let data = '';
-    req.setEncoding('utf8');
-    req.on('data', function(chunk) {
-        data += chunk;
-    });
-
-    req.on('end', function() {
-        console.log('Raw request body:', data);
-        req.rawBody = data;
-        next();
-    });
-});
-
 // Middleware for parsing JSON and enabling CORS
 app.use(express.json());
 app.use(cors({
@@ -28,25 +13,14 @@ app.use(cors({
     methods: ['POST']
 }));
 
-// Error handling middleware for JSON parsing errors
-app.use((err, req, res, next) => {
-    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-        console.error('JSON Parse Error:', err.message);
-        console.error('Raw body received:', req.rawBody);
-        return res.status(400).json({ 
-            error: 'Invalid JSON',
-            details: 'The request body must be valid JSON'
-        });
-    }
-    next(err);
-});
-
-// Debug logging middleware
+// Enhanced logging middleware
 app.use((req, res, next) => {
-    console.log('Request URL:', req.url);
-    console.log('Request Method:', req.method);
-    console.log('Request Headers:', req.headers);
-    console.log('Parsed Request Body:', req.body);
+    console.log('\n--- New Request ---');
+    console.log('Timestamp:', new Date().toISOString());
+    console.log('Method:', req.method);
+    console.log('Path:', req.path);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Body:', JSON.stringify(req.body, null, 2));
     next();
 });
 
@@ -73,32 +47,71 @@ const feedbackSchema = new mongoose.Schema({
 
 const Feedback = mongoose.model('Feedback', feedbackSchema);
 
-// Update the endpoint to match your request
+// Feedback submission endpoint with detailed error handling
 app.post('/api/feedback', async (req, res) => {
-  try {
-      console.log('Processing feedback submission with body:', req.body);
-      const feedback = new Feedback(req.body);
-      await feedback.save();
-      console.log('Feedback saved successfully');
-      res.status(201).json({ message: 'Feedback submitted successfully' });
-  } catch (error) {
-      console.error('Error processing feedback:', error);
-      res.status(500).json({ 
-          message: 'Error submitting feedback',
-          error: error.message 
-      });
-  }
+    try {
+        // Log the incoming data
+        console.log('\nProcessing feedback submission:');
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+
+        // Validate required fields before creating the model
+        if (!req.body.page) {
+            throw new Error('Page field is required');
+        }
+        if (!req.body.type || !['like', 'dislike'].includes(req.body.type)) {
+            throw new Error('Valid type (like/dislike) is required');
+        }
+
+        // Create and validate the feedback instance
+        const feedback = new Feedback(req.body);
+        const validationError = feedback.validateSync();
+        if (validationError) {
+            throw new Error(`Validation error: ${validationError.message}`);
+        }
+
+        // Attempt to save
+        console.log('Attempting to save feedback to MongoDB...');
+        await feedback.save();
+        console.log('Feedback saved successfully');
+        
+        res.status(201).json({ 
+            message: 'Feedback submitted successfully',
+            id: feedback._id 
+        });
+    } catch (error) {
+        // Enhanced error logging
+        console.error('\nError processing feedback:');
+        console.error('Error name:', error.name);
+        console.error('Error message:', error.message);
+        console.error('Error stack:', error.stack);
+        
+        // Send appropriate error response
+        res.status(500).json({ 
+            message: 'Error submitting feedback',
+            error: error.message,
+            type: error.name
+        });
+    }
 });
 
-// Connect to MongoDB
+// MongoDB connection with detailed error handling
 mongoose.connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true
 })
-.then(() => console.log('Connected to MongoDB'))
-.catch(err => console.error('MongoDB connection error:', err));
+.then(() => {
+    console.log('Successfully connected to MongoDB');
+    console.log('Database connection status:', mongoose.connection.readyState);
+})
+.catch(err => {
+    console.error('MongoDB connection error:');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
+});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log('Environment:', process.env.NODE_ENV);
 });
