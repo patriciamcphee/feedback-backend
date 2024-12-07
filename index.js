@@ -96,39 +96,22 @@ app.post('/api/feedback', async (req, res) => {
 
 // MongoDB connection with detailed error handling
 mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
+    useNewUrlParser: true,
+    useUnifiedTopology: true
 })
 .then(() => {
-  console.log('Successfully connected to MongoDB');
-  console.log('Database connection status:', mongoose.connection.readyState);
+    console.log('Successfully connected to MongoDB');
+    console.log('Database connection status:', mongoose.connection.readyState);
 })
 .catch(err => {
-  console.error('MongoDB connection error:', err);
+    console.error('MongoDB connection error:');
+    console.error('Error name:', err.name);
+    console.error('Error message:', err.message);
+    console.error('Error stack:', err.stack);
 });
 
-// Add connection error handling
-mongoose.connection.on('error', err => {
-  console.error('MongoDB connection error:', err);
-});
-
-// Add reconnection handling
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB disconnected. Attempting to reconnect...');
-});
-
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected successfully');
-});
-
-// Handle application shutdown gracefully
-process.on('SIGINT', async () => {
-  try {
-      await mongoose.connection.close();
-      console.log('MongoDB connection closed through app termination');
-      process.exit(0);
-  } catch (err) {
-      console.error('Error during MongoDB disconnection:', err);
-      process.exit(1);
-  }
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    console.log('Environment:', process.env.NODE_ENV);
 });
