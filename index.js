@@ -6,19 +6,47 @@ require('dotenv').config();
 
 const app = express();
 
+// Add raw body logging before JSON parsing
+app.use((req, res, next) => {
+    let data = '';
+    req.setEncoding('utf8');
+    req.on('data', function(chunk) {
+        data += chunk;
+    });
+
+    req.on('end', function() {
+        console.log('Raw request body:', data);
+        req.rawBody = data;
+        next();
+    });
+});
+
 // Middleware for parsing JSON and enabling CORS
 app.use(express.json());
 app.use(cors({
-    // Allow requests only from your Docusaurus domain
-    origin: 'https://smart-search-plugin-demo.vercel.app',  // Removed trailing slash
+    origin: 'https://smart-search-plugin-demo.vercel.app',
     methods: ['POST']
 }));
 
-// Add debug logging middleware
+// Error handling middleware for JSON parsing errors
+app.use((err, req, res, next) => {
+    if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+        console.error('JSON Parse Error:', err.message);
+        console.error('Raw body received:', req.rawBody);
+        return res.status(400).json({ 
+            error: 'Invalid JSON',
+            details: 'The request body must be valid JSON'
+        });
+    }
+    next(err);
+});
+
+// Debug logging middleware
 app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
     console.log('Request Headers:', req.headers);
-    console.log('Request Body:', req.body);
+    console.log('Parsed Request Body:', req.body);
     next();
 });
 
@@ -47,20 +75,19 @@ const Feedback = mongoose.model('Feedback', feedbackSchema);
 
 // Update the endpoint to match your request
 app.post('/api/feedback', async (req, res) => {
-    try {
-        console.log('Attempting to save feedback:', req.body);
-        const feedback = new Feedback(req.body);
-        await feedback.save();
-        console.log('Feedback saved successfully');
-        res.status(201).json({ message: 'Feedback submitted successfully' });
-    } catch (error) {
-        console.error('Detailed error:', {
-            message: error.message,
-            stack: error.stack,
-            name: error.name
-        });
-        res.status(500).json({ message: 'Error submitting feedback' });
-    }
+  try {
+      console.log('Processing feedback submission with body:', req.body);
+      const feedback = new Feedback(req.body);
+      await feedback.save();
+      console.log('Feedback saved successfully');
+      res.status(201).json({ message: 'Feedback submitted successfully' });
+  } catch (error) {
+      console.error('Error processing feedback:', error);
+      res.status(500).json({ 
+          message: 'Error submitting feedback',
+          error: error.message 
+      });
+  }
 });
 
 // Connect to MongoDB
